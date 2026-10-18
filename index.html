@@ -137,6 +137,23 @@ header{padding:calc(14px + env(safe-area-inset-top)) 4px 0}
 .savebar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:var(--bg)}
 .savebar button{display:block;width:100%;max-width:536px;margin:0 auto;padding:13px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600}
 
+.trow{display:grid;grid-template-columns:54px 1fr;gap:0 8px;padding:10px 14px 10px 13px;position:relative;border-left:3px solid var(--bar,transparent)}
+.trow+.trow::before{content:"";position:absolute;top:0;left:13px;right:0;height:1px;background:var(--rule)}
+.trow .tm{font-size:16px;font-weight:600;line-height:1.3}
+.trow .tm small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
+.trow .t{font-weight:500;overflow-wrap:anywhere}
+.trow .t a{color:inherit;text-decoration:none}
+.trow .meta{margin-top:2px;font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 8px;align-items:center}
+.trow.cx .t{text-decoration:line-through;color:var(--muted)}
+.trow.due{background:color-mix(in srgb,var(--hot) 7%,transparent)}
+.trow.dn .t{text-decoration:line-through;color:var(--muted)}
+.tag{font-size:12px;line-height:1.5;padding:0 8px;border-radius:999px;background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted);white-space:nowrap}
+.tag.warn{color:var(--hot);background:color-mix(in srgb,var(--hot) 16%,transparent);font-weight:600}
+.tag.bad{color:var(--late);background:color-mix(in srgb,var(--late) 14%,transparent);font-weight:600}
+.tag.now{color:var(--on-accent);background:var(--accent);font-weight:600}
+.gh .wk2{font-size:13px;color:var(--muted)}
+.free{padding:10px 16px 0;font-size:13px;color:var(--muted)}
+.holi{padding:10px 16px;font-size:14px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--rule);
   display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
 nav.tabs button{flex:1;padding:8px 0 7px;font-size:11px;font-weight:500;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -156,6 +173,7 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
   <main>
     <section id="p-deadlines"></section>
     <section id="p-updates" class="hidden"></section>
+    <section id="p-timetable" class="hidden"></section>
     <section id="p-courses" class="hidden"></section>
     <section id="p-settings" class="hidden"></section>
   </main>
@@ -163,6 +181,7 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 
 <nav class="tabs" id="tabs" role="tablist">
   <button role="tab" id="tab-deadlines" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Deadlines</button>
+  <button role="tab" id="tab-timetable" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>Timetable</button>
   <button role="tab" id="tab-updates" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>Updates</button>
   <button role="tab" id="tab-courses" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 4.5h10a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h10"/></svg>Courses</button>
   <button role="tab" id="tab-settings" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 7h9M18 7h1M5 17h1M10 17h9"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Settings</button>
@@ -193,7 +212,7 @@ var P=parse();
 var NOW_LINK=parseInt(P.t,10)||0;
 var MODE=P.m==='s'?'s':'d';
 var BOT=dec(P.b||'');
-var DEF={la:14,dw:7,dg:1,dm:480,rf:24,rn:3,nf:1,na:1,ng:1,qo:0,qs:1380,qe:420,pm:30};
+var DEF={la:14,dw:7,dg:1,dm:480,rf:24,rn:3,nf:1,na:1,ng:1,qo:0,qs:1380,qe:420,pm:30,cl:15,rl:1,rt:1,rb:1,ro:1,td:1,ce:1,xc:1};
 var S=Object.assign({},DEF);
 (P.s||'').split(',').forEach(function(p){var a=p.split('~');if(a.length===2&&a[0] in DEF&&isFinite(+a[1]))S[a[0]]=+a[1]});
 var items=(P.d||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
@@ -357,6 +376,194 @@ function renderDeadlines(){
   host.appendChild(el('div',{class:'foot',text:'Showing the next '+S.la+' days. Ticks are only for you; Canvas is not told.'+(NOW_LINK&&nowSec()-NOW_LINK>6*3600?' Snapshot from '+ago(NOW_LINK)+'; send /app for a fresh one.':'')}));
 }
 
+/* ---------- timetable ---------- */
+// The bot sends only which modules and classes you picked (tt), possible cancellations (x) and Canvas calendar
+// events (e). The weekly slots come straight from NUSMods; week numbers and holidays are worked out here.
+// These two tables are copied from timetable.h in the bot and must stay the same (a test compares them).
+var HOLIDAYS=[[2026,1,1,"New Year's Day"],[2026,2,17,"Chinese New Year"],[2026,2,18,"Chinese New Year"],[2026,3,21,"Hari Raya Puasa"],[2026,4,3,"Good Friday"],[2026,5,1,"Labour Day"],
+  [2026,5,27,"Hari Raya Haji"],[2026,5,31,"Vesak Day"],[2026,6,1,"Vesak Day (in lieu)"],[2026,8,9,"National Day"],[2026,8,10,"National Day (in lieu)"],[2026,10,9,"NUS Well-Being Day"],
+  [2026,11,8,"Deepavali"],[2026,11,9,"Deepavali (in lieu)"],[2026,12,25,"Christmas Day"],[2027,1,1,"New Year's Day"],[2027,2,6,"Chinese New Year"],[2027,2,7,"Chinese New Year"],
+  [2027,2,8,"Chinese New Year (in lieu)"],[2027,3,10,"Hari Raya Puasa"],[2027,3,11,"NUS Well-Being Day"],[2027,3,26,"Good Friday"],[2027,5,1,"Labour Day"],
+  [2027,5,17,"Hari Raya Haji"],[2027,5,20,"Vesak Day"],[2027,8,9,"National Day"],[2027,10,1,"NUS Well-Being Day"],[2027,10,28,"Deepavali"],[2027,12,25,"Christmas Day"]];
+var ACAD_SEMS=[[2026,1,2026,8,10],[2026,2,2027,1,11],[2027,1,2027,8,9],[2027,2,2028,1,10]];
+var TYPES={'Lecture':['LEC','Lecture',1],'Design Lecture':['DLEC','Lecture',1],'Packaged Lecture':['PLEC','Lecture',1],'Sectional Teaching':['SEC','Sectional',1],
+  'Tutorial':['TUT','Tutorial',2],'Tutorial Type 2':['TUT2','Tutorial',2],'Tutorial Type 3':['TUT3','Tutorial',2],'Packaged Tutorial':['PTUT','Tutorial',2],'Recitation':['REC','Recitation',2],
+  'Seminar-Style Module Class':['SEM','Seminar',2],'Laboratory':['LAB','Lab',4],'Workshop':['WS','Workshop',4],'Mini-Project':['MPRJ','Project',4]};
+var BYABBR={}; Object.keys(TYPES).forEach(function(k){BYABBR[TYPES[k][0]]=TYPES[k]});
+function typeAbbr(name){if(TYPES[name])return TYPES[name][0]; return name.split(/[ -]+/).map(function(w){return w.charAt(0).toUpperCase()}).join('')}
+function typeShort(abbr){return BYABBR[abbr]?BYABBR[abbr][1]:abbr}
+function typeCat(abbr){return BYABBR[abbr]?BYABBR[abbr][2]:8}
+
+function dn(y,m,d){return Math.round(Date.UTC(y,m-1,d)/864e5)}
+var HOLMAP={}; HOLIDAYS.forEach(function(h){HOLMAP[dn(h[0],h[1],h[2])]=h[3]});
+function todayDn(){var d=new Date();return dn(d.getFullYear(),d.getMonth()+1,d.getDate())}
+function dnParts(n){var d=new Date(n*864e5);return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate()}}
+function wdMon0(n){return ((n%7)+7+3)%7}
+function acadWeek(w1,n){
+  if(!w1||n<w1)return {w:0,label:''};
+  var k=Math.floor((n-w1)/7);
+  if(k<=5)return {w:k+1,label:''}; if(k===6)return {w:0,label:'Recess week'}; if(k<=13)return {w:k,label:''};
+  if(k===14)return {w:0,label:'Reading week'}; if(k<=16)return {w:0,label:'Exam weeks'}; return {w:0,label:''};
+}
+function fmtDn(n){var p=dnParts(n);return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][wdMon0(n)]+' '+p.d+' '+MON[p.m-1]}
+function hmMin(m){return p2(Math.floor(m/60))+':'+p2(m%60)}
+function sameModule(courseCode,mod){
+  if(!courseCode||!mod||courseCode.toUpperCase().indexOf(mod.toUpperCase())!==0)return false;
+  return !/[A-Za-z0-9]/.test(courseCode.charAt(mod.length)||' ');
+}
+
+var TT=null;
+(function(){
+  if(!P.tt)return;
+  var a=dec(P.tt).split('~'); if(a.length<4||a[2].length!==8)return;
+  var mods=a[3].split(',').filter(Boolean).map(function(m){var p=m.split('.'),picks=[];
+    for(var i=1;i+1<p.length;i+=2)picks.push([p[i].toUpperCase(),p[i+1]]);
+    return {code:p[0].toUpperCase(),picks:picks}});
+  TT={ay:+a[0],sem:+a[1],w1:dn(+a[2].slice(0,4),+a[2].slice(4,6),+a[2].slice(6,8)),mods:mods};
+})();
+var NOTICES=(P.x||'').split(',').filter(Boolean).map(function(x){var a=x.split('.');
+  return {code:a[0],day:a[1]&&a[1].length===8?dn(+a[1].slice(0,4),+a[1].slice(4,6),+a[1].slice(6,8)):0,mask:+a[2]||0,kind:+a[3]||0,state:+a[4]||0}}).filter(function(n){return n.day});
+var EVENTS=(P.e||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
+  return {s:+a[0],e:+a[1],cid:a[2],title:dec(a[3]||''),place:dec(a[4]||''),all:a[5]==='1'}}).filter(function(e){return e.s>0});
+
+var modRes={}, modNote={}, modBusy=0, ttRange=7;
+var CACHE_MS=24*3600*1000;
+function cacheKey(m){return 'nm1:'+TT.ay+':'+TT.sem+':'+m.code+':'+m.picks.map(function(p){return p.join('')}).join('')}
+function reduceModule(m,json){
+  var out=[], sd=(json.semesterData||[]).filter(function(x){return x.semester===TT.sem})[0];
+  if(!sd)return {l:out,note:m.code+' isn\u2019t offered in Semester '+TT.sem};
+  var hit={};
+  (sd.timetable||[]).forEach(function(t){
+    var abbr=typeAbbr(t.lessonType||''), pk=-1;
+    m.picks.forEach(function(p,i){if(p[0]===abbr&&String(p[1]).toLowerCase()===String(t.classNo).toLowerCase())pk=i});
+    if(pk<0)return; hit[pk]=1;
+    var day=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].indexOf(t.day); if(day<0)return;
+    var mask=0; if(Array.isArray(t.weeks))t.weeks.forEach(function(w){if(w>=1&&w<=13)mask|=1<<(w-1)}); else mask=0x1FFF;
+    var st=Math.floor(+t.startTime/100)*60+(+t.startTime%100), en=Math.floor(+t.endTime/100)*60+(+t.endTime%100);
+    for(var i=0;i<out.length;i++){var o=out[i];
+      if(o.abbr===abbr&&o.no===t.classNo&&o.day===day&&o.start===st&&o.end===en){o.weeks|=mask;return}}
+    out.push({code:m.code,abbr:abbr,no:t.classNo,day:day,start:st,end:en,weeks:mask,venue:t.venue||''});
+  });
+  var miss=m.picks.filter(function(p,i){return !hit[i]}).map(function(p){return p[0]+' '+p[1]});
+  return {l:out,note:miss.length?m.code+' has no '+miss.join(', ')+' this semester':''};
+}
+function loadModules(){
+  if(!TT)return;
+  TT.mods.forEach(function(m){
+    var key=cacheKey(m), cached=null;
+    try{cached=JSON.parse(localStorage.getItem(key)||'null')}catch(e){}
+    if(cached&&cached.l){modRes[m.code]=cached.l; if(cached.note)modNote[m.code]=cached.note;}
+    if(cached&&Date.now()-cached.at<CACHE_MS)return;
+    modBusy++;
+    var url='https://api.nusmods.com/v2/'+TT.ay+'-'+(TT.ay+1)+'/modules/'+encodeURIComponent(m.code)+'.json';
+    var ctl=window.AbortController?new AbortController():null, timer=setTimeout(function(){if(ctl)ctl.abort()},20000);
+    fetch(url,ctl?{signal:ctl.signal}:{}).then(function(r){
+      if(r.status===404)throw new Error('nf'); if(!r.ok)throw new Error('http'); return r.json();
+    }).then(function(j){
+      var res=reduceModule(m,j); modRes[m.code]=res.l; if(res.note)modNote[m.code]=res.note; else delete modNote[m.code];
+      try{localStorage.setItem(key,JSON.stringify({at:Date.now(),l:res.l,note:res.note}))}catch(e){}
+    }).catch(function(err){
+      if(err&&err.message==='nf')modNote[m.code]=m.code+' wasn\u2019t found on NUSMods for AY'+TT.ay+'/'+String(TT.ay+1).slice(2);
+      else if(!modRes[m.code])modNote[m.code]='Couldn\u2019t load '+m.code+' from NUSMods. Check your connection and reopen.';
+    }).then(function(){clearTimeout(timer);modBusy--;if(current==='timetable')renderTimetable()});
+  });
+}
+function allLessons(){var l=[];Object.keys(modRes).forEach(function(k){l=l.concat(modRes[k])});return l}
+
+function evCode(e){var c=courses[e.cid]||'';return c}
+function dayEntries(n){
+  var out=[], aw=acadWeek(TT.w1,n), wd=wdMon0(n), hol=HOLMAP[n];
+  if(!hol&&aw.w) allLessons().forEach(function(l){
+    if(l.day===wd&&((l.weeks>>(aw.w-1))&1))out.push({src:'c',start:l.start,end:l.end,code:l.code,abbr:l.abbr,no:l.no,venue:l.venue,cat:typeCat(l.abbr),flag:0,clash:false});
+  });
+  out.forEach(function(o){
+    NOTICES.forEach(function(x){
+      if(x.day!==n||x.state===2||(x.kind!==1&&x.kind!==2))return;
+      if(!sameModule(x.code,o.code)&&x.code.toUpperCase()!==o.code)return;
+      if(x.mask&&!(x.mask&o.cat))return;
+      var f=x.state===1?2:1; if(f>o.flag)o.flag=f;
+    });
+  });
+  EVENTS.forEach(function(e){
+    var d=new Date(e.s*1000); if(dn(d.getFullYear(),d.getMonth()+1,d.getDate())!==n)return;
+    var st=e.all?0:d.getHours()*60+d.getMinutes(), en=0;
+    if(!e.all){var d2=new Date(e.e*1000), same=dn(d2.getFullYear(),d2.getMonth()+1,d2.getDate())===n; en=same?Math.max(st,d2.getHours()*60+d2.getMinutes()):1439}
+    out.push({src:'e',start:st,end:en,all:e.all,title:e.title,place:e.place,code:evCode(e),flag:0,clash:false});
+  });
+  for(var i=0;i<out.length;i++)for(var j=i+1;j<out.length;j++){
+    var a=out[i],b=out[j]; if(a.all||b.all||a.flag===2||b.flag===2)continue;
+    if(a.src==='e'&&b.src==='e')continue;
+    if(a.src==='e'&&!sameModule(a.code,b.code))continue; if(b.src==='e'&&!sameModule(b.code,a.code))continue;
+    if(a.start<b.end&&b.start<a.end){a.clash=b.clash=true}
+  }
+  out.sort(function(a,b){return a.start-b.start||a.end-b.end});
+  return out;
+}
+function dueOn(n){
+  return visibleItems().filter(function(i){var d=new Date(i.due*1000);return dn(d.getFullYear(),d.getMonth()+1,d.getDate())===n}).sort(function(a,b){return a.due-b.due});
+}
+function infoNotes(n){return NOTICES.filter(function(x){return x.day===n&&x.state!==2&&(x.kind===3||x.kind===4)})}
+function tag(text,cls){return el('span',{class:'tag'+(cls?' '+cls:''),text:text})}
+
+function renderTimetable(){
+  var host=document.getElementById('p-timetable'); host.innerHTML='';
+  if(!TT){
+    host.appendChild(el('div',{class:'empty'},[el('b',{text:'No timetable yet'}),'In the chat, send /timetable followed by your NUSMods share link. Classes then appear here next to your Canvas deadlines.']));
+    return;
+  }
+  var chips=el('div',{class:'chips',role:'group','aria-label':'How many days'});
+  [[1,'Today'],[7,'7 days'],[14,'14 days']].forEach(function(r){chips.appendChild(el('button',{class:'chip',type:'button','aria-pressed':String(ttRange===r[0]),text:r[1],onclick:function(){ttRange=r[0];renderTimetable()}}))});
+  host.appendChild(chips);
+  var notes=Object.keys(modNote).map(function(k){return modNote[k]});
+  if(modBusy&&!allLessons().length)host.appendChild(el('div',{class:'note',text:'Loading your classes from NUSMods…'}));
+  if(notes.length)host.appendChild(el('div',{class:'note',style:'color:var(--hot)',text:notes.join('. ')+'.'}));
+  var n0=todayDn(), nowMin=new Date().getHours()*60+new Date().getMinutes(), freeRun=[];
+  function flushFree(){
+    if(!freeRun.length)return;
+    var a=freeRun[0],b=freeRun[freeRun.length-1];
+    var lb=acadWeek(TT.w1,a).label;
+    host.appendChild(el('div',{class:'free',text:(a===b?fmtDn(a):fmtDn(a)+' to '+fmtDn(b))+': '+(lb?lb+', ':'')+'nothing scheduled'}));
+    freeRun=[];
+  }
+  for(var k=0;k<ttRange;k++){
+    var n=n0+k, entries=dayEntries(n), dues=dueOn(n), infos=infoNotes(n), hol=HOLMAP[n];
+    if(!entries.length&&!dues.length&&!infos.length&&!hol){freeRun.push(n);continue}
+    flushFree();
+    var aw=acadWeek(TT.w1,n), right=aw.w?'Week '+aw.w:aw.label;
+    host.appendChild(el('div',{class:'gh'},[el('b',{text:(k===0?'Today':k===1?'Tomorrow':fmtDn(n))+(k<2?'  ':'')}),el('span',{class:'wk2',text:(k<2?fmtDn(n)+(right?' · ':''):'')+right})]));
+    var card=el('div',{class:'card'});
+    if(hol)card.appendChild(el('div',{class:'holi'},['🎌 ',el('b',{text:hol}),' · no classes']));
+    entries.forEach(function(o){
+      var cx=o.flag===2, tags=[];
+      if(o.flag===2)tags.push(tag('Cancelled','bad')); else if(o.flag===1)tags.push(tag('May be cancelled: confirm in chat','warn'));
+      if(o.clash)tags.push(tag('Clash','warn'));
+      if(k===0&&o.src==='c'&&o.start<=nowMin&&nowMin<o.end&&!cx)tags.push(tag('Now','now'));
+      var colour=o.code?'hsl('+hueOf(o.code)+','+(isDark()?'65%':'60%')+','+(isDark()?'70%':'38%')+')':'var(--muted)';
+      var title, meta=[];
+      if(o.src==='c'){title=el('span',{},[el('b',{text:o.code}),' '+typeShort(o.abbr)]); if(o.venue)meta.push(el('span',{text:o.venue})); meta.push(el('span',{text:o.abbr+' '+o.no}))}
+      else{title=el('span',{},[o.code?el('b',{text:o.code+' '}):null,o.title]); meta.push(tag('Canvas event')); if(o.place)meta.push(el('span',{text:o.place}))}
+      tags.forEach(function(t){meta.push(t)});
+      card.appendChild(el('div',{class:'trow'+(cx?' cx':''),style:'--bar:'+colour},[
+        el('div',{class:'tm num'},o.all?[el('small',{text:'All day'})]:[hmMin(o.start),el('small',{text:hmMin(o.end)})]),
+        el('div',{},[el('div',{class:'t'},[title]),el('div',{class:'meta'},meta)])]));
+    });
+    infos.forEach(function(x){
+      card.appendChild(el('div',{class:'trow'},[el('div',{class:'tm',text:'📌'}),el('div',{},[el('div',{class:'t'},[el('b',{text:x.code+' '}),x.kind===3?'Possible make-up or extra class':'Possible venue or online change']),el('div',{class:'meta',text:'From an announcement. Check Canvas.'})])]));
+    });
+    dues.forEach(function(it){
+      card.appendChild(el('div',{class:'trow due'+(done[it.aid]?' dn':''),style:'--bar:var(--hot)'},[
+        el('div',{class:'tm num',text:hm(it.due)}),
+        el('div',{},[el('div',{class:'t'},[el('a',{href:CANVAS+'/courses/'+it.cid+(it.kind==='q'?'/quizzes/':it.kind==='d'?'/discussion_topics/':'/assignments/')+it.aid,target:'_blank',rel:'noopener',text:it.title})]),
+          el('div',{class:'meta'},[tag('Due','warn'),el('span',{text:courseName(it.cid)})])])]));
+    });
+    host.appendChild(card);
+  }
+  flushFree();
+  host.appendChild(el('div',{class:'foot',text:'Classes come from NUSMods and the NUS academic calendar, so recess week, public holidays and NUS Well-Being Days are left out. '+
+    '“May be cancelled” comes from matching words in announcements; it is a prompt to check, not a fact.'}));
+}
+function hueOf(code){var h=0;for(var i=0;i<code.length;i++)h=(h*31+code.charCodeAt(i))>>>0;return h%360}
+
 /* ---------- updates tab ---------- */
 var ICON={
   f:'<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
@@ -436,6 +643,7 @@ function renderSettingsSummary(){
   host.appendChild(section('Reminders',[line('First reminder',S.rf?S.rf+'h before':'Off'),line('Final reminder',S.rn?S.rn+'h before':'Off')]));
   host.appendChild(section('Alerts',[line('New files',yn(S.nf)),line('Announcements',yn(S.na)),line('Grades',yn(S.ng)),
     line('Quiet hours',S.qo?fmtMin(S.qs)+' to '+fmtMin(S.qe):'Off'),line('Check Canvas every',S.pm+' min')]));
+  host.appendChild(section('Classes',[line('Reminder before class',S.cl?S.cl+' min':'Off'),line('In the morning digest',yn(S.td)),line('Canvas calendar events',yn(S.ce)),line('Cancellation flags',yn(S.xc))]));
   var nh=Object.keys(hiddenSet).length;
   if(courseOrder.length)host.appendChild(section('Courses',[line('Active',(courseOrder.length-nh)+''),line('Hidden',nh+'')]));
   host.appendChild(el('p',{class:'note',text:'To change these, tap the Settings button beside the message box in the chat.'}));
@@ -477,6 +685,10 @@ function renderEditor(){
     sw('qo','Quiet hours','Messages still arrive, without a sound',renderEditor),
     draft.qo?tm('qs','From'):null, draft.qo?tm('qe','To'):null,
     sel('pm','Check Canvas every',[[10,'10 minutes'],[15,'15 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours'],[240,'4 hours']],'Files, announcements and grades are checked at most every 30 minutes')]));
+  host.appendChild(section('Classes',[sel('cl','Remind me before class',[[0,'Off'],[5,'5 minutes'],[10,'10 minutes'],[15,'15 minutes'],[30,'30 minutes'],[60,'1 hour']],'Needs a timetable: send /timetable in the chat'),
+    sw('rl','Lectures'),sw('rt','Tutorials'),sw('rb','Labs and workshops'),sw('ro','Other classes'),
+    sw('td','Classes in the morning digest'),sw('ce','Canvas calendar events','Exams and extra classes, shown next to your classes'),
+    sw('xc','Flag possible cancellations','Looks for words like \u201ccancelled\u201d in announcements for your modules and asks you to confirm')]));
   if(courseOrder.length){
     var rows=courseOrder.map(function(id){
       var inp=el('input',{type:'checkbox','aria-label':'Show '+courseName(id)}); inp.checked=!draftHidden[id];
@@ -512,11 +724,12 @@ function save(){
 var current='deadlines';
 function showTab(name){
   current=name;
-  ['deadlines','updates','courses','settings'].forEach(function(n){
+  ['deadlines','timetable','updates','courses','settings'].forEach(function(n){
     document.getElementById('p-'+n).classList.toggle('hidden',n!==name);
     document.getElementById('tab-'+n).setAttribute('aria-selected',String(n===name));
   });
-  document.getElementById('title').textContent=name==='deadlines'?'Deadlines':name==='updates'?'Updates':name==='courses'?'Courses':'Settings';
+  document.getElementById('title').textContent=name==='deadlines'?'Deadlines':name==='timetable'?'Timetable':name==='updates'?'Updates':name==='courses'?'Courses':'Settings';
+  if(name==='timetable')renderTimetable();
   document.getElementById('rulerCard').classList.toggle('hidden',name!=='deadlines'&&name!=='updates');
   window.scrollTo(0,0);
 }
@@ -527,7 +740,7 @@ function applyTheme(){
   try{tg.setHeaderColor('secondary_bg_color');tg.setBackgroundColor('secondary_bg_color')}catch(e){}
   try{tg.setBottomBarColor('bottom_bar_bg_color')}catch(e){}
 }
-if(tg&&tg.onEvent){try{tg.onEvent('themeChanged',function(){applyTheme();if(MODE==='d'){renderDeadlines();renderCourses()}else{drawHorizon&&items.length&&drawHorizon()}})}catch(e){}}
+if(tg&&tg.onEvent){try{tg.onEvent('themeChanged',function(){applyTheme();if(MODE==='d'){renderDeadlines();renderCourses();if(current==='timetable')renderTimetable()}else{drawHorizon&&items.length&&drawHorizon()}})}catch(e){}}
 
 function subtitle(){
   var sub=document.getElementById('sub');
@@ -546,7 +759,7 @@ function start(){
   if(MODE==='s'){
     document.getElementById('tabs').classList.add('hidden');
     document.getElementById('title').textContent='Settings';
-    ['deadlines','updates','courses'].forEach(function(n){document.getElementById('p-'+n).classList.add('hidden')});
+    ['deadlines','timetable','updates','courses'].forEach(function(n){document.getElementById('p-'+n).classList.add('hidden')});
     document.getElementById('p-settings').classList.remove('hidden');
     if(inTg&&tg.MainButton){
       try{tg.MainButton.setParams({text:'Save settings',color:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||undefined,text_color:getComputedStyle(document.documentElement).getPropertyValue('--on-accent').trim()||undefined});
@@ -561,8 +774,8 @@ function start(){
     return;
   }
   loadDone(function(){
-    subtitle(); drawHorizon(); renderDeadlines(); renderUpdates(); renderCourses(); renderSettingsSummary();
-    ['deadlines','updates','courses','settings'].forEach(function(n){document.getElementById('tab-'+n).onclick=function(){showTab(n)}});
+    subtitle(); drawHorizon(); renderDeadlines(); renderUpdates(); renderCourses(); renderSettingsSummary(); loadModules();
+    ['deadlines','timetable','updates','courses','settings'].forEach(function(n){document.getElementById('tab-'+n).onclick=function(){showTab(n)}});
   });
 }
 start();
