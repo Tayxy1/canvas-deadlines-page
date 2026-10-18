@@ -175,7 +175,7 @@ var DEF={la:14,dw:7,dg:1,dm:480,rf:24,rn:3,nf:1,na:1,ng:1,qo:0,qs:1380,qe:420,pm
 var S=Object.assign({},DEF);
 (P.s||'').split(',').forEach(function(p){var a=p.split('~');if(a.length===2&&a[0] in DEF&&isFinite(+a[1]))S[a[0]]=+a[1]});
 var items=(P.d||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
-  return {due:+a[0],cid:+a[1],aid:+a[2],title:dec(a[3]||'')}}).filter(function(x){return x.due>0});
+  return {due:+a[0],cid:+a[1],aid:+a[2],title:dec(a[3]||''),kind:a[4]||'a'}}).filter(function(x){return x.due>0});
 var updates=(P.u||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
   return {kind:a[0],at:+a[1],cid:+a[2],title:dec(a[3]||''),extra:dec(a[4]||''),kindId:a[5]||''}}).filter(function(x){return x.at>0});
 var courses={}, courseOrder=[];
@@ -248,7 +248,7 @@ function drawHorizon(){
     if(!weekly){
       dt=new Date(today.getFullYear(),today.getMonth(),today.getDate()+i); var dw=dt.getDay();
       if(dw===0||dw===6)svg.appendChild(svgEl('rect',{class:'wk',x:x,y:6,width:cw,height:base-6}));
-      if(dw===1||i===0){svg.appendChild(svgEl('line',{class:'tick',x1:x,x2:x,y1:6,y2:base+6}));
+      if(i===0||(dw===1&&i>=3)){svg.appendChild(svgEl('line',{class:'tick',x1:x,x2:x,y1:6,y2:base+6}));
         tx=svgEl('text',{x:x+2,y:base+20});tx.textContent=dt.getDate()+' '+MON[dt.getMonth()];svg.appendChild(tx)}
     } else if(i%2===0){
       dt=new Date(today.getFullYear(),today.getMonth(),today.getDate()+i*7);
@@ -316,7 +316,7 @@ function renderDeadlines(){
       var row=el('div',{class:'row u-'+u+(done[it.aid]?' done':''),id:'r'+it.aid});
       row.appendChild(el('div',{class:'tm'},[hm(it.due)]));
       var body=el('div',{});
-      body.appendChild(el('a',{class:'t',href:CANVAS+'/courses/'+it.cid+'/assignments/'+it.aid,target:'_blank',rel:'noopener',text:it.title}));
+      body.appendChild(el('a',{class:'t',href:CANVAS+'/courses/'+it.cid+(it.kind==='q'?'/quizzes/':it.kind==='d'?'/discussion_topics/':'/assignments/')+it.aid,target:'_blank',rel:'noopener',text:it.title}));
       body.appendChild(el('div',{class:'meta'},[el('span',{class:'cr',text:courseName(it.cid),style:'color:'+cColor(it.cid)}),el('span',{class:'cd',text:remain(it.due)})]));
       row.appendChild(body);
       row.appendChild(el('button',{class:'tick',type:'button','aria-label':(done[it.aid]?'Mark not done: ':'Mark done: ')+it.title,onclick:function(){
