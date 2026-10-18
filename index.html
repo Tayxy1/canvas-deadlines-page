@@ -113,6 +113,14 @@ header{padding:calc(14px + env(safe-area-inset-top)) 0 4px}
 .savebar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--ground);border-top:1.5px solid var(--ink)}
 .savebar button{display:block;width:100%;max-width:528px;margin:0 auto;padding:13px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-weight:600}
 
+.crs{padding:14px 0;border-bottom:1px solid var(--rule)}
+.crs .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.crs .nm a{font:800 26px/1 var(--display);letter-spacing:.01em;text-decoration:none}
+.crs .nm span{font-size:13px;color:var(--muted)}
+.crs .lk{display:flex;flex-wrap:wrap;gap:6px 8px;margin-top:10px}
+.crs .lk a,.crs .lk button{padding:6px 12px;border:1px solid var(--rule);border-radius:999px;font-size:14px;color:var(--ink);text-decoration:none;min-height:34px;display:inline-flex;align-items:center}
+.upd a{color:inherit;text-decoration:none}
+.upd a:hover{text-decoration:underline}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);border-top:1.5px solid var(--ink);
   display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
 nav.tabs button{flex:1;padding:12px 0 11px;font-weight:500;color:var(--muted);position:relative}
@@ -132,6 +140,7 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
   <main>
     <section id="p-deadlines"></section>
     <section id="p-updates" class="hidden"></section>
+    <section id="p-courses" class="hidden"></section>
     <section id="p-settings" class="hidden"></section>
   </main>
 </div>
@@ -139,6 +148,7 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
 <nav class="tabs" id="tabs" role="tablist">
   <button role="tab" id="tab-deadlines" aria-selected="true">Deadlines</button>
   <button role="tab" id="tab-updates" aria-selected="false">Updates</button>
+  <button role="tab" id="tab-courses" aria-selected="false">Courses</button>
   <button role="tab" id="tab-settings" aria-selected="false">Settings</button>
 </nav>
 <div class="savebar hidden" id="savebar"><button id="saveBtn" type="button">Save settings</button></div>
@@ -167,9 +177,9 @@ var S=Object.assign({},DEF);
 var items=(P.d||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
   return {due:+a[0],cid:+a[1],aid:+a[2],title:dec(a[3]||'')}}).filter(function(x){return x.due>0});
 var updates=(P.u||'').split(',').filter(Boolean).map(function(x){var a=x.split('~');
-  return {kind:a[0],at:+a[1],cid:+a[2],title:dec(a[3]||''),extra:dec(a[4]||'')}}).filter(function(x){return x.at>0});
-var courses={};
-(P.c||'').split(',').filter(Boolean).forEach(function(x){var a=x.split('~');courses[a[0]]=dec(a[1]||'')});
+  return {kind:a[0],at:+a[1],cid:+a[2],title:dec(a[3]||''),extra:dec(a[4]||''),kindId:a[5]||''}}).filter(function(x){return x.at>0});
+var courses={}, courseOrder=[];
+(P.c||'').split(',').filter(Boolean).forEach(function(x){var a=x.split('~');courses[a[0]]=dec(a[1]||'');courseOrder.push(a[0])});
 
 function nowSec(){return Math.floor(Date.now()/1000)}
 function courseName(cid){return courses[cid]||('Course '+cid)}
@@ -334,10 +344,30 @@ function renderUpdates(){
   }
   updates.slice().sort(function(a,b){return b.at-a.at}).forEach(function(u){
     var ic=el('div',{}); ic.innerHTML=ICON[u.kind]||ICON.f;
-    var what=el('div',{},[el('div',{class:'what',text:u.title||VERB[u.kind]}),el('div',{class:'where',text:(VERB[u.kind]||'Update')+' in '+courseName(u.cid)})]);
+    var path=u.kind==='f'?'/files/':u.kind==='a'?'/discussion_topics/':'/assignments/';
+    var what=el('div',{},[el('div',{class:'what'},[el('a',{href:CANVAS+'/courses/'+u.cid+path+(u.kindId||''),target:'_blank',rel:'noopener',text:u.title||VERB[u.kind]})]),el('div',{class:'where',text:(VERB[u.kind]||'Update')+' in '+courseName(u.cid)})]);
     var right=u.kind==='g'&&u.extra?el('div',{class:'score',text:u.extra}):el('div',{class:'when',text:ago(u.at)});
     host.appendChild(el('div',{class:'upd'},[ic,what,right]));
   });
+}
+
+/* ---------- courses tab ---------- */
+function renderCourses(){
+  var host=document.getElementById('p-courses'); host.innerHTML='';
+  if(!courseOrder.length){
+    host.appendChild(el('div',{class:'empty'},[el('b',{text:'No courses yet'}),'The bot loads them after its first Canvas check. Send /status in the chat to see what it receives.']));
+    return;
+  }
+  courseOrder.forEach(function(id){
+    var cid=+id, n=items.filter(function(i){return i.cid===cid&&!done[i.aid]}).length, base=CANVAS+'/courses/'+cid;
+    var lk=el('div',{class:'lk'});
+    if(n)lk.appendChild(el('button',{type:'button',text:'Deadlines',onclick:function(){activeCourse=cid;renderDeadlines();showTab('deadlines')}}));
+    [['Files','/files'],['Grades','/grades'],['Announcements','/announcements'],['Syllabus','/assignments/syllabus']].forEach(function(l){
+      lk.appendChild(el('a',{href:base+l[1],target:'_blank',rel:'noopener',text:l[0]}))});
+    host.appendChild(el('div',{class:'crs'},[
+      el('div',{class:'nm'},[el('a',{href:base,target:'_blank',rel:'noopener',text:courseName(cid),style:'color:'+cColor(cid)}),el('span',{text:n?n+' to do':'Nothing due'})]),lk]));
+  });
+  host.appendChild(el('div',{class:'foot',text:'Files opens the course\'s Files page in Canvas, where you can download them.'}));
 }
 
 /* ---------- settings ---------- */
@@ -420,11 +450,11 @@ function save(){
 var current='deadlines';
 function showTab(name){
   current=name;
-  ['deadlines','updates','settings'].forEach(function(n){
+  ['deadlines','updates','courses','settings'].forEach(function(n){
     document.getElementById('p-'+n).classList.toggle('hidden',n!==name);
     document.getElementById('tab-'+n).setAttribute('aria-selected',String(n===name));
   });
-  document.getElementById('title').textContent=name==='deadlines'?'Deadlines':name==='updates'?'Updates':'Settings';
+  document.getElementById('title').textContent=name==='deadlines'?'Deadlines':name==='updates'?'Updates':name==='courses'?'Courses':'Settings';
   window.scrollTo(0,0);
 }
 
@@ -451,7 +481,7 @@ function start(){
   if(MODE==='s'){
     document.getElementById('tabs').classList.add('hidden');
     document.getElementById('title').textContent='Settings';
-    ['deadlines','updates'].forEach(function(n){document.getElementById('p-'+n).classList.add('hidden')});
+    ['deadlines','updates','courses'].forEach(function(n){document.getElementById('p-'+n).classList.add('hidden')});
     document.getElementById('p-settings').classList.remove('hidden');
     if(inTg&&tg.MainButton){
       try{tg.MainButton.setParams({text:'Save settings',color:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),text_color:getComputedStyle(document.documentElement).getPropertyValue('--on-accent').trim()});
@@ -466,9 +496,10 @@ function start(){
     return;
   }
   loadDone(function(){
-    subtitle(); drawHorizon(); renderDeadlines(); renderUpdates(); renderSettingsSummary();
+    subtitle(); drawHorizon(); renderDeadlines(); renderUpdates(); renderCourses(); renderSettingsSummary();
     document.getElementById('tab-deadlines').onclick=function(){showTab('deadlines')};
     document.getElementById('tab-updates').onclick=function(){showTab('updates')};
+    document.getElementById('tab-courses').onclick=function(){showTab('courses')};
     document.getElementById('tab-settings').onclick=function(){showTab('settings')};
   });
 }
