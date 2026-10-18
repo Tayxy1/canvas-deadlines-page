@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deadlines</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f3f5);
+    --text: var(--tg-theme-text-color, #16181d);
+    --hint: var(--tg-theme-hint-color, #6b7280);
+    --link: var(--tg-theme-link-color, #2563eb);
+    --btn: var(--tg-theme-button-color, #2563eb);
+    --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    --late: #d6334a;
+    --hot: #e8590c;
+    --warm: #c28a00;
+    --calm: #8a94a6;
+    --chip-l: 40%;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-scheme="light"]) {
+      --bg: var(--tg-theme-bg-color, #14161a);
+      --bg2: var(--tg-theme-secondary-bg-color, #1d2025);
+      --text: var(--tg-theme-text-color, #eceef2);
+      --hint: var(--tg-theme-hint-color, #9aa3b2);
+      --late: #ff6b81; --hot: #ff8f4d; --warm: #f0c24b; --calm: #6b7587;
+      --chip-l: 76%;
+    }
+  }
+  :root[data-scheme="dark"] { --late: #ff6b81; --hot: #ff8f4d; --warm: #f0c24b; --calm: #6b7587; --chip-l: 76%; }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 0 0 max(24px, env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 14px 0 10px; border-bottom: 1px solid var(--bg2); }
+  h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { color: var(--hint); font-size: 13px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip-btn {
+    flex: none; border: 0; border-radius: 999px; padding: 8px 14px; min-height: 36px;
+    background: var(--bg2); color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .chip-btn[aria-pressed="true"] { background: var(--btn); color: var(--btn-text); }
+
+  h2 { margin: 22px 0 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--hint); }
+  h2.late { color: var(--late); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  li {
+    display: grid; grid-template-columns: 44px 1fr auto; align-items: center;
+    background: var(--bg2); border-radius: 14px; padding: 4px 12px 4px 0;
+    border-left: 4px solid var(--calm);
+  }
+  li.late { border-left-color: var(--late); }
+  li.hot  { border-left-color: var(--hot); }
+  li.warm { border-left-color: var(--warm); }
+  li.done { opacity: .5; }
+  li.done .title { text-decoration: line-through; }
+
+  .tick { width: 44px; height: 44px; border: 0; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .tick span {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--hint); display: grid; place-items: center;
+    color: var(--btn-text); font-size: 14px; line-height: 1;
+  }
+  li.done .tick span { background: var(--btn); border-color: var(--btn); }
+  .main { min-width: 0; padding: 8px 0; }
+  .title {
+    display: block; color: var(--text); text-decoration: none; font-weight: 600; overflow-wrap: anywhere;
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: 13px; color: var(--hint); }
+  .course {
+    border-radius: 6px; padding: 1px 7px; font-weight: 600; font-size: 12px;
+    background: hsl(var(--h) 70% 50% / .16); color: hsl(var(--h) 60% var(--chip-l));
+  }
+  .left { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; padding-left: 8px; color: var(--hint); }
+  li.late .left { color: var(--late); } li.hot .left { color: var(--hot); } li.warm .left { color: var(--warm); }
+
+  .empty { text-align: center; color: var(--hint); padding: 56px 8px; }
+  .empty b { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  .link { background: none; border: 0; color: var(--link); font: inherit; font-size: 14px; padding: 14px 0; cursor: pointer; }
+  .foot { text-align: center; color: var(--hint); font-size: 12px; margin-top: 18px; }
+  :focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Deadlines</h1>
+    <div class="sub" id="sub"></div>
+    <div class="chips" id="chips" role="group" aria-label="Filter by course"></div>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+
+<script>
+"use strict";
+// Where "open in Canvas" links go. Change this if your school's Canvas address differs.
+const CANVAS_BASE = "https://canvas.nus.edu.sg";
+
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  try { tg.ready(); tg.expand(); } catch (e) {}
+  if (tg.colorScheme) document.documentElement.dataset.scheme = tg.colorScheme;
+}
+
+// ---------------------------------------------------------------- data ---
+// Query format (written by the ESP32):  ?t=<epoch>&d=<due>~<courseId>~<assignmentId>~<title>,...&c=<courseId>~<label>,...
+// Values are percent-encoded, so we split on the raw string first and decode afterwards.
+function rawQuery() {
+  const out = {};
+  for (const part of location.search.replace(/^\?/, "").split("&")) {
+    const i = part.indexOf("=");
+    if (i > 0) out[part.slice(0, i)] = part.slice(i + 1);
+  }
+  return out;
+}
+function dec(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
+
+function parseData(q) {
+  const courses = {};
+  (q.c || "").split(",").filter(Boolean).forEach(p => {
+    const f = p.split("~");
+    if (/^\d+$/.test(f[0])) courses[f[0]] = dec(f.slice(1).join("~"));
+  });
+  const items = [];
+  (q.d || "").split(",").filter(Boolean).forEach(p => {
+    const f = p.split("~");
+    if (f.length < 4) return;
+    const due = Number(f[0]);
+    if (!Number.isFinite(due) || !/^\d+$/.test(f[1]) || !/^\d+$/.test(f[2])) return;
+    items.push({ due: due * 1000, cid: f[1], aid: f[2], title: dec(f.slice(3).join("~")) });
+  });
+  items.sort((a, b) => a.due - b.due);
+  const t = Number(q.t);
+  return { generated: Number.isFinite(t) && t > 0 ? t * 1000 : null, courses, items };
+}
+
+const data = parseData(rawQuery());
+
+// ---------------------------------------------------------- done state ---
+// "Done" is a personal tick for things Canvas doesn't know about; it lives on your device / Telegram account.
+let done = new Set();
+const DONE_KEY = "done_v1";
+function loadDone(cb) {
+  const apply = raw => { try { done = new Set(JSON.parse(raw || "[]")); } catch (e) {} cb(); };
+  try {
+    if (tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9")) {
+      tg.CloudStorage.getItem(DONE_KEY, (err, v) => apply(err ? localStorage.getItem(DONE_KEY) : v));
+      return;
+    }
+  } catch (e) {}
+  try { apply(localStorage.getItem(DONE_KEY)); } catch (e) { cb(); }
+}
+function saveDone() {
+  const live = new Set(data.items.map(i => i.aid));              // forget ticks for items no longer listed
+  const raw = JSON.stringify([...done].filter(id => live.has(id)));
+  try { localStorage.setItem(DONE_KEY, raw); } catch (e) {}
+  try { if (tg && tg.CloudStorage && tg.isVersionAtLeast("6.9")) tg.CloudStorage.setItem(DONE_KEY, raw); } catch (e) {}
+}
+
+// ------------------------------------------------------------- helpers ---
+const GROUPS = ["Overdue", "Today", "Tomorrow", "This week", "Later"];
+const dayStart = ms => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+
+function bucket(due, now) {
+  if (due <= now) return 0;
+  const diff = Math.round((dayStart(due) - dayStart(now)) / 86400000);
+  return diff === 0 ? 1 : diff === 1 ? 2 : diff <= 7 ? 3 : 4;
+}
+function urgency(due, now) {
+  const rem = due - now;
+  return rem <= 0 ? "late" : rem <= 86400000 ? "hot" : rem <= 3 * 86400000 ? "warm" : "calm";
+}
+function remaining(ms) {
+  if (ms <= 0) return "overdue";
+  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
+}
+const fmtDue = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function hue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function courseName(cid) { return data.courses[cid] || `Course ${cid}`; }
+function haptic(kind) { try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(kind); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function openCanvas(it) {
+  const url = `${CANVAS_BASE}/courses/${it.cid}/assignments/${it.aid}`;
+  if (tg && tg.openLink) tg.openLink(url); else window.open(url, "_blank", "noopener");
+}
+
+// -------------------------------------------------------------- render ---
+let filter = "all";
+let showDone = false;
+
+function render() {
+  const now = Date.now();
+  const app = document.getElementById("app");
+  app.replaceChildren();
+
+  const sub = document.getElementById("sub");
+  const chips = document.getElementById("chips");
+  chips.replaceChildren();
+
+  if (!data.items.length) {
+    sub.textContent = "";
+    const e = el("div", "empty");
+    e.append(el("b", null, "No deadlines to show"));
+    e.append(document.createTextNode(location.search
+      ? "Nothing upcoming. Enjoy it. 🎉"
+      : "Open this page from the bot's “Open dashboard” button — it carries your deadlines."));
+    app.append(e);
+    return;
+  }
+
+  // header: freshness
+  if (data.generated) {
+    const age = now - data.generated;
+    sub.textContent = `Snapshot from ${age < 60000 ? "just now" : remaining(age) + " ago"}` +
+      (age > 3 * 3600000 ? " · send /due for a fresh one" : "");
+  }
+
+  // course chips
+  const cids = [...new Set(data.items.map(i => i.cid))];
+  const mk = (key, label) => {
+    const b = el("button", "chip-btn", label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(filter === key));
+    b.onclick = () => { filter = key; haptic("light"); render(); };
+    chips.append(b);
+  };
+  mk("all", `All (${data.items.length})`);
+  if (cids.length > 1) cids.forEach(c => mk(c, courseName(c)));
+  if (filter !== "all" && !cids.includes(filter)) filter = "all";
+
+  const visible = data.items.filter(i => (filter === "all" || i.cid === filter) && (showDone || !done.has(i.aid)));
+  const hiddenDone = data.items.filter(i => (filter === "all" || i.cid === filter) && done.has(i.aid)).length;
+
+  GROUPS.forEach((name, g) => {
+    const list = visible.filter(i => bucket(i.due, now) === g);
+    if (!list.length) return;
+    app.append(el("h2", g === 0 ? "late" : "", `${name} · ${list.length}`));
+    const ul = el("ul");
+    list.forEach(it => {
+      const li = el("li", urgency(it.due, now) + (done.has(it.aid) ? " done" : ""));
+
+      const tick = el("button", "tick");
+      tick.type = "button";
+      tick.setAttribute("aria-label", (done.has(it.aid) ? "Mark not done: " : "Mark done: ") + it.title);
+      tick.append(el("span", null, done.has(it.aid) ? "✓" : ""));
+      tick.onclick = () => { done.has(it.aid) ? done.delete(it.aid) : done.add(it.aid); saveDone(); haptic("medium"); render(); };
+
+      const main = el("div", "main");
+      const title = el("a", "title", it.title);
+      title.href = `${CANVAS_BASE}/courses/${it.cid}/assignments/${it.aid}`;
+      title.onclick = e => { e.preventDefault(); openCanvas(it); };
+      const meta = el("div", "meta");
+      const course = el("span", "course", courseName(it.cid));
+      course.style.setProperty("--h", hue(it.cid));
+      meta.append(course, el("span", null, fmtDue.format(new Date(it.due))));
+      main.append(title, meta);
+
+      li.append(tick, main, el("div", "left", remaining(it.due - now)));
+      ul.append(li);
+    });
+    app.append(ul);
+  });
+
+  if (!visible.length) {
+    const e = el("div", "empty");
+    e.append(el("b", null, "All done here"), document.createTextNode("Nothing left in this view. 🎉"));
+    app.append(e);
+  }
+  if (hiddenDone || showDone) {
+    const b = el("button", "link", showDone ? "Hide completed" : `Show ${hiddenDone} completed`);
+    b.type = "button";
+    b.onclick = () => { showDone = !showDone; render(); };
+    app.append(b);
+  }
+  app.append(el("div", "foot", "Ticks here are just for you — they don't submit anything to Canvas."));
+}
+
+loadDone(render);
+setInterval(render, 30000);   // keep countdowns fresh
+</script>
+</body>
+</html>
