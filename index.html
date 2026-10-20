@@ -761,10 +761,8 @@ function start(){
     document.getElementById('title').textContent='Settings';
     ['deadlines','timetable','updates','courses'].forEach(function(n){document.getElementById('p-'+n).classList.add('hidden')});
     document.getElementById('p-settings').classList.remove('hidden');
-    if(inTg&&tg.MainButton){
-      try{tg.MainButton.setParams({text:'Save settings',color:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||undefined,text_color:getComputedStyle(document.documentElement).getPropertyValue('--on-accent').trim()||undefined});
-          tg.MainButton.onClick(save);tg.MainButton.show();document.body.style.paddingBottom='72px'}catch(e){document.getElementById('savebar').classList.remove('hidden')}
-    } else { document.getElementById('savebar').classList.remove('hidden'); document.body.style.paddingBottom='96px'; }
+    // Always use the in-page Save button: Telegram's own bottom button doesn't show reliably on every Android version.
+    document.getElementById('savebar').classList.remove('hidden'); document.body.style.paddingBottom='96px';
     renderEditor();
     return;
   }
